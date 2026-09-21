@@ -11,15 +11,72 @@ import {
   dailyTarget,
 } from '../lib/format';
 import {
-  Calendar,
   ChevronRight,
   Check,
   AlertTriangle,
-  ArrowUpDown,
   Building2,
-  Clock,
-  TrendingDown,
+  TrendingUp,
+  CheckCircle2,
 } from 'lucide-react';
+
+type Tone = 'good' | 'warning' | 'critical' | 'neutral';
+
+const TONE_STYLES: Record<Tone, { bg: string; border: string; text: string; fill: string; iconBg: string }> = {
+  good: { bg: '#ECFDF3', border: '#ABEFC6', text: '#1F7A4D', fill: '#1F7A4D', iconBg: '#DFF7E8' },
+  warning: { bg: '#FEF6EE', border: '#FBD9A0', text: '#B7791F', fill: '#B7791F', iconBg: '#FCEBD5' },
+  critical: { bg: '#FEF3F2', border: '#FECDCA', text: '#B42318', fill: '#B42318', iconBg: '#FDE1DE' },
+  neutral: { bg: '#FFFFFF', border: '#D9DEDA', text: '#16324F', fill: '#16324F', iconBg: '#F0F5F9' },
+};
+
+/** A single summary figure: label, compact value, one line of context, and an
+ * optional meter. Kept local to this screen — it's a small, single-use shape. */
+function StatTile({
+  label,
+  value,
+  sub,
+  tone = 'neutral',
+  meterPct,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone?: Tone;
+  meterPct?: number;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  const t = TONE_STYLES[tone];
+  return (
+    <div
+      className="rounded-[6px] border p-3.5 sm:p-4 shadow-xs"
+      style={{ backgroundColor: t.bg, borderColor: t.border }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: t.text }}>
+          {label}
+        </p>
+        <div
+          className="w-7 h-7 rounded-[6px] flex items-center justify-center shrink-0"
+          style={{ backgroundColor: t.iconBg }}
+        >
+          <Icon className="w-3.5 h-3.5" style={{ color: t.text }} />
+        </div>
+      </div>
+      <p className="text-xl sm:text-2xl font-semibold text-[#16324F] mt-1.5 leading-tight">
+        {value}
+      </p>
+      <p className="text-[11px] text-[#5B6670] mt-1">{sub}</p>
+      {typeof meterPct === 'number' && (
+        <div className="mt-2.5 h-1.5 rounded-full bg-[#EEF0ED] overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${Math.min(100, Math.max(0, meterPct))}%`, backgroundColor: t.fill }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface HubDashboardRow {
   hub: Hub;
@@ -160,6 +217,14 @@ export function DashboardScreen() {
       ? Math.round((totals.todayRevenue / totals.todayTarget) * 100)
       : 0;
 
+  const mtdAchievement =
+    totals.monthlyTarget > 0
+      ? Math.round((totals.mtdRevenue / totals.monthlyTarget) * 100)
+      : 0;
+
+  const onTrackCount = boardRows.filter((r) => r.achievementPct >= 100).length;
+  const attentionCount = boardRows.filter((r) => r.middayAlert || r.closingAlert).length;
+
   const formatReportTime = (ts?: string) => {
     if (!ts) return '';
     try {
@@ -215,6 +280,45 @@ export function DashboardScreen() {
         </div>
       )}
 
+      {!loading && !error && boardRows.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile
+            label="Today's revenue"
+            value={formatINR(totals.todayRevenue)}
+            sub={`of ${formatINR(totals.todayTarget)} target`}
+            tone={overallAchievement >= 100 ? 'good' : overallAchievement >= 70 ? 'warning' : 'critical'}
+            meterPct={overallAchievement}
+            icon={TrendingUp}
+          />
+          <StatTile
+            label="MTD revenue"
+            value={formatINR(totals.mtdRevenue)}
+            sub={
+              totals.monthlyGap === 0
+                ? `Monthly target met`
+                : `${formatINR(totals.monthlyGap)} left of ${formatINR(totals.monthlyTarget)}`
+            }
+            tone="neutral"
+            meterPct={mtdAchievement}
+            icon={Building2}
+          />
+          <StatTile
+            label="On track today"
+            value={`${onTrackCount} / ${boardRows.length}`}
+            sub="branches at or above target"
+            tone={onTrackCount === boardRows.length ? 'good' : 'neutral'}
+            icon={CheckCircle2}
+          />
+          <StatTile
+            label="Needs attention"
+            value={String(attentionCount)}
+            sub={attentionCount === 0 ? 'all reports on time' : 'branches with a missing report'}
+            tone={attentionCount === 0 ? 'good' : 'critical'}
+            icon={AlertTriangle}
+          />
+        </div>
+      )}
+
       {loading ? (
         <div className="py-16 text-center text-[#5B6670]">
           <div className="w-7 h-7 border-2 border-[#16324F] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
@@ -252,11 +356,13 @@ export function DashboardScreen() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D9DEDA]">
-                {boardRows.map((row) => (
+                {boardRows.map((row, idx) => (
                   <tr
                     key={row.hub.id}
                     onClick={() => navigate(`/hub/${row.hub.id}`)}
-                    className="hover:bg-[#F9FAF8] cursor-pointer transition-colors"
+                    className={`hover:bg-[#F0F5F9] cursor-pointer transition-colors ${
+                      idx % 2 === 1 ? 'bg-[#FAFBFA]' : 'bg-white'
+                    }`}
                   >
                     {/* Branch Name & Code */}
                     <td className="py-3 px-3 sm:px-4">
@@ -327,6 +433,20 @@ export function DashboardScreen() {
                       >
                         {row.achievementPct}%
                       </span>
+                      <div className="w-16 h-1 rounded-full bg-[#EEF0ED] mx-auto mt-1.5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, row.achievementPct))}%`,
+                            backgroundColor:
+                              row.achievementPct >= 100
+                                ? '#1F7A4D'
+                                : row.achievementPct >= 70
+                                ? '#B7791F'
+                                : '#B42318',
+                          }}
+                        />
+                      </div>
                     </td>
 
                     {/* MTD Revenue */}

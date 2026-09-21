@@ -22,13 +22,19 @@
 //    Configuration → Redirect URLs allow list, or Supabase will refuse the
 //    redirect and silently fall back to the project's default Site URL.
 //
-// Two request shapes:
-//  { full_name, email, role, phone? }        -> create a brand-new account
+// Three request shapes:
+//  { full_name, email, role, phone? }         -> create a brand-new account
 //  { mode: 'resend', email }                  -> re-issue the set-password
 //                                                 link for an existing user
 //                                                 (e.g. their first link
 //                                                 expired, or was generated
 //                                                 before SITE_URL was set)
+//  { mode: 'set-password', user_id, password } -> Super Admin sets someone's
+//                                                 password directly, for
+//                                                 when handing them a link
+//                                                 isn't practical. Still
+//                                                 gated on the same
+//                                                 active-super_admin check.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -85,14 +91,34 @@ Deno.serve(async (req) => {
 
     // 2. Validate input.
     const body = await req.json().catch(() => ({}));
+
+    // 3. Privileged actions — service role, bypasses RLS.
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // ---- set-password mode: Super Admin sets it directly, no link needed.
+    if (body.mode === 'set-password') {
+      const targetUserId = String(body.user_id || '').trim();
+      const newPassword = String(body.password || '');
+      if (!targetUserId) {
+        return json({ success: false, error: 'Missing user.' });
+      }
+      if (newPassword.length < 8) {
+        return json({ success: false, error: 'Password must be at least 8 characters.' });
+      }
+      const { error: pwErr } = await adminClient.auth.admin.updateUserById(targetUserId, {
+        password: newPassword,
+      });
+      if (pwErr) {
+        return json({ success: false, error: pwErr.message || 'Could not set the password.' });
+      }
+      return json({ success: true, id: targetUserId, setPasswordLink: null });
+    }
+
     const email = String(body.email || '').trim().toLowerCase();
 
     if (!email || !email.includes('@')) {
       return json({ success: false, error: 'Enter a valid email address.' });
     }
-
-    // 3. Privileged actions — service role, bypasses RLS.
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // ---- resend mode: just re-issue a set-password link for someone who
     // already has an account (their first link expired, or predates the

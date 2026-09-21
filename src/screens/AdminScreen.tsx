@@ -14,6 +14,7 @@ import {
   unassignManager,
   adminCreateUser,
   adminResendSetPasswordLink,
+  adminSetPassword,
 } from '../api/endpoints';
 import type { Hub, Profile, AppRole } from '../types/api';
 import { formatINR, dailyTarget } from '../lib/format';
@@ -30,6 +31,7 @@ import {
   Copy,
   X,
   Link2,
+  KeyRound,
 } from 'lucide-react';
 
 const ROLE_OPTIONS: { role: AppRole; label: string }[] = [
@@ -77,6 +79,12 @@ export function AdminScreen() {
   const [npSaving, setNpSaving] = useState(false);
   const [newAccountLink, setNewAccountLink] = useState<{ name: string; link: string | null } | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+
+  // Inline "set password directly" form
+  const [pwUserId, setPwUserId] = useState<string | null>(null);
+  const [pwValue, setPwValue] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
 
   // Mapping Tab State
   const [selectedMappingHubId, setSelectedMappingHubId] = useState<string>('');
@@ -249,6 +257,38 @@ export function AdminScreen() {
       toast(err.message || 'Could not generate a link.', 'error');
     } finally {
       setResendingId(null);
+    }
+  };
+
+  // 2d. People Tab Handler: Super Admin sets a password directly
+  const toggleSetPassword = (userId: string) => {
+    setPwUserId((cur) => (cur === userId ? null : userId));
+    setPwValue('');
+    setPwConfirm('');
+  };
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pwUserId) return;
+    if (pwValue.length < 8) {
+      toast('Password must be at least 8 characters.', 'error');
+      return;
+    }
+    if (pwValue !== pwConfirm) {
+      toast('Passwords do not match.', 'error');
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await adminSetPassword(pwUserId, pwValue);
+      toast('Password updated.', 'success');
+      setPwUserId(null);
+      setPwValue('');
+      setPwConfirm('');
+    } catch (err: any) {
+      toast(err.message || 'Could not set password.', 'error');
+    } finally {
+      setPwSaving(false);
     }
   };
 
@@ -646,12 +686,13 @@ export function AdminScreen() {
                     <th className="py-3 px-3 font-semibold">Phone</th>
                     <th className="py-3 px-3 font-semibold">Assigned Role</th>
                     <th className="py-3 px-3 font-semibold text-center">Status</th>
-                    <th className="py-3 px-3 font-semibold text-center">Login link</th>
+                    <th className="py-3 px-3 font-semibold text-center">Account access</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D9DEDA]">
                   {profiles.map((usr) => (
-                    <tr key={usr.id} className="hover:bg-[#F9FAF8]">
+                    <React.Fragment key={usr.id}>
+                    <tr className="hover:bg-[#F9FAF8]">
                       <td className="py-3 px-3 sm:px-4">
                         <div className="font-semibold text-[#1D2329]">
                           {usr.full_name}
@@ -703,20 +744,82 @@ export function AdminScreen() {
                         </button>
                       </td>
 
-                      {/* Resend set-password link */}
+                      {/* Account access: resend link, or set a password directly */}
                       <td className="py-2.5 px-3 text-center">
-                        <button
-                          type="button"
-                          disabled={resendingId === usr.id || usr.id === profile?.id}
-                          onClick={() => handleResendLink(usr.id, usr.full_name, usr.email)}
-                          title={usr.id === profile?.id ? 'Use Supabase Authentication to reset your own password' : 'Generate a fresh set-password link'}
-                          className="min-h-[36px] px-2.5 py-1 rounded-[4px] text-xs font-medium border border-[#D9DEDA] text-[#16324F] hover:bg-[#F0F5F9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 mx-auto"
-                        >
-                          <Link2 className="w-3.5 h-3.5" />
-                          {resendingId === usr.id ? '…' : 'Resend'}
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={resendingId === usr.id || usr.id === profile?.id}
+                            onClick={() => handleResendLink(usr.id, usr.full_name, usr.email)}
+                            title={usr.id === profile?.id ? 'Use Supabase Authentication to reset your own password' : 'Generate a fresh set-password link'}
+                            className="min-h-[36px] px-2.5 py-1 rounded-[4px] text-xs font-medium border border-[#D9DEDA] text-[#16324F] hover:bg-[#F0F5F9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            {resendingId === usr.id ? '…' : 'Resend'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleSetPassword(usr.id)}
+                            title="Set this person's password directly"
+                            className={`min-h-[36px] px-2.5 py-1 rounded-[4px] text-xs font-medium border flex items-center gap-1 ${
+                              pwUserId === usr.id
+                                ? 'bg-[#16324F] border-[#16324F] text-white'
+                                : 'border-[#D9DEDA] text-[#16324F] hover:bg-[#F0F5F9]'
+                            }`}
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            Set
+                          </button>
+                        </div>
                       </td>
                     </tr>
+
+                    {/* Inline "set password directly" form */}
+                    {pwUserId === usr.id && (
+                      <tr className="bg-[#F0F5F9]">
+                        <td colSpan={5} className="p-3">
+                          <form
+                            onSubmit={handleSetPassword}
+                            className="flex flex-col sm:flex-row sm:items-center gap-2"
+                          >
+                            <span className="text-xs text-[#16324F] font-medium shrink-0">
+                              Set password for {usr.full_name}:
+                            </span>
+                            <input
+                              type="password"
+                              autoFocus
+                              placeholder="New password (min 8 characters)"
+                              value={pwValue}
+                              onChange={(e) => setPwValue(e.target.value)}
+                              className="input-ledger flex-1 text-xs"
+                            />
+                            <input
+                              type="password"
+                              placeholder="Confirm password"
+                              value={pwConfirm}
+                              onChange={(e) => setPwConfirm(e.target.value)}
+                              className="input-ledger flex-1 text-xs"
+                            />
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button type="submit" disabled={pwSaving} className="btn-primary text-xs px-3 py-1.5">
+                                {pwSaving ? 'Saving…' : 'Save password'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleSetPassword(usr.id)}
+                                className="btn-secondary text-xs px-3 py-1.5"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                          <p className="text-[11px] text-[#5B6670] mt-2">
+                            They'll be able to sign in with this password right away — tell them what it is over a call or in person, not written down.
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                   ))}
                 </tbody>
               </table>

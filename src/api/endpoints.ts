@@ -218,6 +218,20 @@ export async function adminResendSetPasswordLink(email: string): Promise<{ setPa
   return { setPasswordLink: data.setPasswordLink ?? null };
 }
 
+/**
+ * Super Admin sets someone's password directly — for when handing them a
+ * link isn't practical. The password is sent once, over an authenticated
+ * HTTPS call straight to the Edge Function; it is never logged or stored
+ * anywhere by this app.
+ */
+export async function adminSetPassword(userId: string, password: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+    body: { mode: 'set-password', user_id: userId, password },
+  });
+  if (error) throw new Error(error.message || 'Could not set the password.');
+  if (!data?.success) throw new Error(data?.error || 'Could not set the password.');
+}
+
 // ---------- inventory ----------
 export async function listMedicines(): Promise<Medicine[]> {
   const rows = unwrap(await supabase.from('medicines').select('*').eq('is_active', true).order('name'));

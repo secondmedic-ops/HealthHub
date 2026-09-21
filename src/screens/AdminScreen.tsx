@@ -13,6 +13,7 @@ import {
   assignManager,
   unassignManager,
   adminCreateUser,
+  adminResendSetPasswordLink,
 } from '../api/endpoints';
 import type { Hub, Profile, AppRole } from '../types/api';
 import { formatINR, dailyTarget } from '../lib/format';
@@ -28,6 +29,7 @@ import {
   UserPlus,
   Copy,
   X,
+  Link2,
 } from 'lucide-react';
 
 const ROLE_OPTIONS: { role: AppRole; label: string }[] = [
@@ -74,6 +76,7 @@ export function AdminScreen() {
   const [npRole, setNpRole] = useState<AppRole>('manager');
   const [npSaving, setNpSaving] = useState(false);
   const [newAccountLink, setNewAccountLink] = useState<{ name: string; link: string | null } | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Mapping Tab State
   const [selectedMappingHubId, setSelectedMappingHubId] = useState<string>('');
@@ -228,6 +231,24 @@ export function AdminScreen() {
       toast(err.message || 'Could not create the account.', 'error');
     } finally {
       setNpSaving(false);
+    }
+  };
+
+  // 2c. People Tab Handler: Resend a set-password link (expired / pre-fix link)
+  const handleResendLink = async (userId: string, name: string, email: string | null) => {
+    if (!email) {
+      toast('This person has no email on file.', 'error');
+      return;
+    }
+    setResendingId(userId);
+    try {
+      const result = await adminResendSetPasswordLink(email);
+      setNewAccountLink({ name, link: result.setPasswordLink });
+      toast(`New link generated for ${name}.`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Could not generate a link.', 'error');
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -625,6 +646,7 @@ export function AdminScreen() {
                     <th className="py-3 px-3 font-semibold">Phone</th>
                     <th className="py-3 px-3 font-semibold">Assigned Role</th>
                     <th className="py-3 px-3 font-semibold text-center">Status</th>
+                    <th className="py-3 px-3 font-semibold text-center">Login link</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D9DEDA]">
@@ -678,6 +700,20 @@ export function AdminScreen() {
                           }`}
                         >
                           {usr.is_active ? 'Active' : 'Disabled'}
+                        </button>
+                      </td>
+
+                      {/* Resend set-password link */}
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          disabled={resendingId === usr.id || usr.id === profile?.id}
+                          onClick={() => handleResendLink(usr.id, usr.full_name, usr.email)}
+                          title={usr.id === profile?.id ? 'Use Supabase Authentication to reset your own password' : 'Generate a fresh set-password link'}
+                          className="min-h-[36px] px-2.5 py-1 rounded-[4px] text-xs font-medium border border-[#D9DEDA] text-[#16324F] hover:bg-[#F0F5F9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 mx-auto"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          {resendingId === usr.id ? '…' : 'Resend'}
                         </button>
                       </td>
                     </tr>

@@ -3,7 +3,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 import { mockFetch, IS_MOCK_ENV } from './mockInterceptor';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+  // detectSessionInUrl must be true so a password-recovery / invite link
+  // (…?token=…&type=recovery) lands here with a working session that
+  // SetPasswordScreen can call auth.updateUser() against.
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   global: {
     fetch: IS_MOCK_ENV ? mockFetch : undefined,
   },

@@ -17,6 +17,18 @@
 //    function) ever displays or stores. Instead we return a Supabase
 //    password-set link that the admin copies and sends to the new person
 //    over WhatsApp/email/etc, so they choose their own password.
+//  - The link points at /set-password on the live site (SITE_URL below) —
+//    that route must also be added to Supabase's Authentication → URL
+//    Configuration → Redirect URLs allow list, or Supabase will refuse the
+//    redirect and silently fall back to the project's default Site URL.
+//
+// Two request shapes:
+//  { full_name, email, role, phone? }        -> create a brand-new account
+//  { mode: 'resend', email }                  -> re-issue the set-password
+//                                                 link for an existing user
+//                                                 (e.g. their first link
+//                                                 expired, or was generated
+//                                                 before SITE_URL was set)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -28,6 +40,10 @@ const corsHeaders = {
 const ALLOWED_ROLES = [
   'staff', 'hub_lead', 'manager', 'accounts', 'purchase_manager', 'field_staff', 'super_admin',
 ];
+
+// Falls back to the known live URL; override with `supabase secrets set
+// SITE_URL=https://your-domain` if the project ever moves.
+const SITE_URL = Deno.env.get('SITE_URL') || 'https://healthhub.delvinnadar12.workers.dev';
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,22 +86,40 @@ Deno.serve(async (req) => {
     // 2. Validate input.
     const body = await req.json().catch(() => ({}));
     const email = String(body.email || '').trim().toLowerCase();
-    const full_name = String(body.full_name || '').trim();
-    const role = String(body.role || 'manager');
-    const phone = body.phone ? String(body.phone).trim() : null;
 
     if (!email || !email.includes('@')) {
       return json({ success: false, error: 'Enter a valid email address.' });
     }
+
+    // 3. Privileged actions — service role, bypasses RLS.
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // ---- resend mode: just re-issue a set-password link for someone who
+    // already has an account (their first link expired, or predates the
+    // SITE_URL fix). No profile changes here. ----
+    if (body.mode === 'resend') {
+      const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo: `${SITE_URL}/set-password` },
+      });
+      if (linkErr || !linkData?.properties?.action_link) {
+        return json({ success: false, error: linkErr?.message || 'Could not generate a link for this email.' });
+      }
+      return json({ success: true, id: null, setPasswordLink: linkData.properties.action_link });
+    }
+
+    // ---- create mode ----
+    const full_name = String(body.full_name || '').trim();
+    const role = String(body.role || 'manager');
+    const phone = body.phone ? String(body.phone).trim() : null;
+
     if (!full_name) {
       return json({ success: false, error: 'Enter the person’s full name.' });
     }
     if (!ALLOWED_ROLES.includes(role)) {
       return json({ success: false, error: 'Not a recognised role.' });
     }
-
-    // 3. Privileged actions — service role, bypasses RLS.
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const tempPassword = crypto.randomUUID() + 'Aa1!';
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
@@ -119,6 +153,7 @@ Deno.serve(async (req) => {
     const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
       type: 'recovery',
       email,
+      options: { redirectTo: `${SITE_URL}/set-password` },
     });
 
     return json({

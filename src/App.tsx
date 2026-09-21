@@ -6,6 +6,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 
 import { LoginScreen } from './screens/LoginScreen';
+import { SetPasswordScreen } from './screens/SetPasswordScreen';
 import { ReportScreen } from './screens/ReportScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -42,8 +43,9 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <Routes>
-            {/* Public route */}
+            {/* Public routes */}
             <Route path="/login" element={<LoginScreen />} />
+            <Route path="/set-password" element={<SetPasswordScreen />} />
 
             {/* Root index redirect */}
             <Route path="/" element={<RootRedirect />} />

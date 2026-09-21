@@ -204,6 +204,20 @@ export async function adminCreateUser(input: {
   return { id: data.id, setPasswordLink: data.setPasswordLink ?? null };
 }
 
+/**
+ * Re-issues a set-password link for an existing account — for when the
+ * first link expired, or was generated before the live redirect URL was
+ * configured. Same Edge Function, resend mode.
+ */
+export async function adminResendSetPasswordLink(email: string): Promise<{ setPasswordLink: string | null }> {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+    body: { mode: 'resend', email },
+  });
+  if (error) throw new Error(error.message || 'Could not generate a link.');
+  if (!data?.success) throw new Error(data?.error || 'Could not generate a link.');
+  return { setPasswordLink: data.setPasswordLink ?? null };
+}
+
 // ---------- inventory ----------
 export async function listMedicines(): Promise<Medicine[]> {
   const rows = unwrap(await supabase.from('medicines').select('*').eq('is_active', true).order('name'));

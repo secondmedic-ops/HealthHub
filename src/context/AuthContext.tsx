@@ -58,6 +58,10 @@ export function roleCanAccess(role: AppRole, path: string): boolean {
     return ['purchase_manager', 'field_staff', 'super_admin'].includes(role);
   }
 
+  if (path === '/team') {
+    return ['manager', 'super_admin'].includes(role);
+  }
+
   return false;
 }
 

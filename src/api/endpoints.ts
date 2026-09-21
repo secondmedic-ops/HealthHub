@@ -3,7 +3,7 @@ import type {
   Profile, Hub, DailyReport, DailyReportInput, DailyPerformanceRow,
   MtdRow, PnlRow, MonthlyCost, TodayStatusRow, HubStaffRow, ManagerHubRow, Snapshot,
   Medicine, HubStockRow, StockPurchaseInput, StockIssueInput, StockPurchase, StockIssue,
-  AppRole,
+  AppRole, TeamMember,
 } from '../types/api';
 
 type PgError = { code?: string; message: string; details?: string | null };
@@ -195,6 +195,10 @@ export async function adminCreateUser(input: {
   full_name: string;
   role: AppRole;
   phone?: string | null;
+  /** Also assigns the new person to this branch. Required when a Manager
+   * (rather than Super Admin) is the one calling — the Edge Function forces
+   * their role to 'staff' and checks this branch is one they manage. */
+  hub_id?: string;
 }): Promise<{ id: string; setPasswordLink: string | null }> {
   const { data, error } = await supabase.functions.invoke('admin-create-user', {
     body: input,
@@ -276,4 +280,29 @@ export async function listRecentIssues(hubIds: string[], limit = 20): Promise<St
   const rows = unwrap(await supabase.from('stock_issues').select('*')
     .in('hub_id', hubIds).order('created_at', { ascending: false }).limit(limit));
   return (rows ?? []).map(nums);
+}
+
+// ---------- manager's team ----------
+/**
+ * The roster for the caller's own branches (every branch, for a Super
+ * Admin). Goes through the Edge Function rather than a plain `profiles`
+ * select because RLS only lets someone read their own profile row — a
+ * Manager has no direct way to see their staff's names otherwise.
+ */
+export async function listMyTeam(): Promise<TeamMember[]> {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+    body: { mode: 'my-team' },
+  });
+  if (error) throw new Error(error.message || 'Could not load your team.');
+  if (!data?.success) throw new Error(data?.error || 'Could not load your team.');
+  return data.team ?? [];
+}
+
+/** Removes a person's assignment to one branch — does not delete their account. */
+export async function unassignTeamMember(staffId: string, hubId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+    body: { mode: 'unassign-staff', staff_id: staffId, hub_id: hubId },
+  });
+  if (error) throw new Error(error.message || 'Could not remove this person.');
+  if (!data?.success) throw new Error(data?.error || 'Could not remove this person.');
 }

@@ -198,3 +198,20 @@ export interface StockIssue extends StockIssueInput {
   issue_date: string;
   created_at: string;
 }
+
+// ---------- manager's team ----------
+/** One person's assignment to one branch, as returned by the my-team mode
+ * of the admin-create-user Edge Function (a Manager can't read the plain
+ * profiles table for people other than themselves — RLS blocks it — so
+ * this comes back pre-joined and pre-scoped to the caller's own branches). */
+export interface TeamMember {
+  staff_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: AppRole;
+  is_active: boolean;
+  hub_id: string;
+  hub_name: string;
+  hub_code: string;
+}

@@ -14,6 +14,7 @@ import { HubDetailScreen } from './screens/HubDetailScreen';
 import { PnlScreen } from './screens/PnlScreen';
 import { AdminScreen } from './screens/AdminScreen';
 import { InventoryScreen } from './screens/InventoryScreen';
+import { TeamScreen } from './screens/TeamScreen';
 
 // Helper to redirect root path "/" to role landing page
 function RootRedirect() {
@@ -65,6 +66,7 @@ export default function App() {
               <Route path="/pnl" element={<PnlScreen />} />
               <Route path="/admin" element={<AdminScreen />} />
               <Route path="/inventory" element={<InventoryScreen />} />
+              <Route path="/team" element={<TeamScreen />} />
             </Route>
 
             {/* Catch-all */}

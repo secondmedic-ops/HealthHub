@@ -10,6 +10,7 @@ import {
   Package,
   LogOut,
   Building2,
+  Users,
 } from 'lucide-react';
 import type { AppRole } from '../types/api';
 
@@ -56,6 +57,12 @@ const ALL_NAV_ITEMS: NavItem[] = [
     label: 'Inventory',
     icon: Package,
     allowedRoles: ['purchase_manager', 'field_staff', 'super_admin'],
+  },
+  {
+    to: '/team',
+    label: 'My Team',
+    icon: Users,
+    allowedRoles: ['manager', 'super_admin'],
   },
 ];
 

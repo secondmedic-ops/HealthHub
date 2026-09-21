@@ -1,0 +1,7 @@
+{
+  "name": "SecondMedic HealthHub",
+  "description": "Daily business reporting and performance review app for pharmacy and diagnostic branches.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

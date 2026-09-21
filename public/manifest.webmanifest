@@ -1,0 +1,17 @@
+{
+  "name": "HealthHub Reporting",
+  "short_name": "HealthHub",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#16324F",
+  "background_color": "#F7F8F6",
+  "description": "Daily business reporting and performance review app for pharmacy and diagnostic branches in India.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

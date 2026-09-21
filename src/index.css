@@ -81,6 +81,15 @@
   box-shadow: 0 0 0 1px #16324F;
 }
 
+/* Inputs with a leading icon (e.g. Mail/Lock in LoginScreen) need more
+   left padding than the default so typed/placeholder text clears the
+   icon. Tailwind's pl-9 utility lives in an @layer and loses to the
+   unlayered padding-left above, so it's restated here at equal
+   (unlayered) cascade priority, scoped to only these inputs. */
+.input-ledger.pl-9 {
+  padding-left: 36px;
+}
+
 /* Subtle ledger dividers */
 .rule-divider {
   border-color: #D9DEDA;

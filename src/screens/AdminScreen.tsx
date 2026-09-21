@@ -12,6 +12,7 @@ import {
   listManagerHubs,
   assignManager,
   unassignManager,
+  adminCreateUser,
 } from '../api/endpoints';
 import type { Hub, Profile, AppRole } from '../types/api';
 import { formatINR, dailyTarget } from '../lib/format';
@@ -24,7 +25,9 @@ import {
   AlertCircle,
   Plus,
   Trash2,
-  Info,
+  UserPlus,
+  Copy,
+  X,
 } from 'lucide-react';
 
 const ROLE_OPTIONS: { role: AppRole; label: string }[] = [
@@ -62,6 +65,15 @@ export function AdminScreen() {
   // People Tab State
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [savingProfileId, setSavingProfileId] = useState<string | null>(null);
+
+  // Add-person (create login) form
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [npName, setNpName] = useState('');
+  const [npEmail, setNpEmail] = useState('');
+  const [npPhone, setNpPhone] = useState('');
+  const [npRole, setNpRole] = useState<AppRole>('manager');
+  const [npSaving, setNpSaving] = useState(false);
+  const [newAccountLink, setNewAccountLink] = useState<{ name: string; link: string | null } | null>(null);
 
   // Mapping Tab State
   const [selectedMappingHubId, setSelectedMappingHubId] = useState<string>('');
@@ -185,6 +197,37 @@ export function AdminScreen() {
       toast(err.message || 'Failed to update profile', 'error');
     } finally {
       setSavingProfileId(null);
+    }
+  };
+
+  // 2b. People Tab Handler: Create a brand-new login (Manager, Staff, …)
+  const handleCreatePerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!npName.trim() || !npEmail.trim()) {
+      toast('Enter a name and email.', 'error');
+      return;
+    }
+    setNpSaving(true);
+    try {
+      const result = await adminCreateUser({
+        email: npEmail.trim(),
+        full_name: npName.trim(),
+        role: npRole,
+        phone: npPhone.trim() || null,
+      });
+      toast(`${npName.trim()} added as ${ROLE_OPTIONS.find((r) => r.role === npRole)?.label || npRole}.`, 'success');
+      setNewAccountLink({ name: npName.trim(), link: result.setPasswordLink });
+      setNpName('');
+      setNpEmail('');
+      setNpPhone('');
+      setNpRole('manager');
+      setShowAddPerson(false);
+      const refreshed = await listProfiles();
+      setProfiles(refreshed);
+    } catch (err: any) {
+      toast(err.message || 'Could not create the account.', 'error');
+    } finally {
+      setNpSaving(false);
     }
   };
 
@@ -462,11 +505,108 @@ export function AdminScreen() {
       {/* TAB 2: PEOPLE */}
       {activeTab === 'people' && (
         <div className="space-y-4">
-          <div className="bg-[#F0F5F9] border border-[#D1E0EC] p-3.5 rounded-[6px] text-xs text-[#16324F] flex items-start gap-2.5">
-            <Info className="w-4 h-4 shrink-0 mt-0.5 text-[#16324F]" />
-            <p className="leading-relaxed">
-              To add a person, create them in Supabase → Authentication, then insert their row in profiles. They appear here.
-            </p>
+          {newAccountLink && (
+            <div className="bg-[#ECFDF3] border border-[#ABEFC6] p-3.5 rounded-[6px] text-xs text-[#1F7A4D] space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="leading-relaxed font-medium">
+                  {newAccountLink.name}'s account is ready. Send them this link so they can set their own password:
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setNewAccountLink(null)}
+                  className="p-1 hover:opacity-70 shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {newAccountLink.link ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={newAccountLink.link}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    className="input-ledger flex-1 text-[11px] font-mono bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(newAccountLink.link || '');
+                      toast('Link copied', 'success');
+                    }}
+                    className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px]">
+                  The account was created, but the set-password link couldn't be generated — send a manual password reset from Supabase Authentication instead.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="bg-white border border-[#D9DEDA] rounded-[6px] p-4 shadow-xs">
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <div>
+                <h3 className="text-sm font-semibold text-[#16324F]">Add a person</h3>
+                <p className="text-xs text-[#5B6670]">
+                  Create a Manager, Branch Staff, Purchase Manager or any other login right here — no Supabase dashboard needed.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddPerson((v) => !v)}
+                className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1 shrink-0"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                {showAddPerson ? 'Cancel' : 'Add person'}
+              </button>
+            </div>
+
+            {showAddPerson && (
+              <form
+                onSubmit={handleCreatePerson}
+                className="mt-3 pt-3 border-t border-[#D9DEDA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2"
+              >
+                <input
+                  className="input-ledger sm:col-span-1"
+                  placeholder="Full name"
+                  value={npName}
+                  onChange={(e) => setNpName(e.target.value)}
+                />
+                <input
+                  className="input-ledger sm:col-span-1"
+                  type="email"
+                  placeholder="Work email"
+                  value={npEmail}
+                  onChange={(e) => setNpEmail(e.target.value)}
+                />
+                <input
+                  className="input-ledger sm:col-span-1"
+                  placeholder="Phone (optional)"
+                  value={npPhone}
+                  onChange={(e) => setNpPhone(e.target.value)}
+                />
+                <select
+                  className="input-ledger sm:col-span-1"
+                  value={npRole}
+                  onChange={(e) => setNpRole(e.target.value as AppRole)}
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r.role} value={r.role}>{r.label}</option>
+                  ))}
+                </select>
+                <button type="submit" disabled={npSaving} className="btn-primary text-xs">
+                  {npSaving ? 'Creating…' : 'Create account'}
+                </button>
+                <p className="sm:col-span-2 lg:col-span-5 text-[11px] text-[#5B6670]">
+                  After creating a Manager, assign their branches from the Mapping tab below — one manager can cover multiple branches.
+                </p>
+              </form>
+            )}
           </div>
 
           <div className="bg-white border border-[#D9DEDA] rounded-[6px] overflow-hidden shadow-xs">

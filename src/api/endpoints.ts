@@ -3,6 +3,7 @@ import type {
   Profile, Hub, DailyReport, DailyReportInput, DailyPerformanceRow,
   MtdRow, PnlRow, MonthlyCost, TodayStatusRow, HubStaffRow, ManagerHubRow, Snapshot,
   Medicine, HubStockRow, StockPurchaseInput, StockIssueInput, StockPurchase, StockIssue,
+  AppRole,
 } from '../types/api';
 
 type PgError = { code?: string; message: string; details?: string | null };
@@ -180,6 +181,27 @@ export async function assignManager(managerId: string, hubId: string): Promise<v
 
 export async function unassignManager(managerId: string, hubId: string): Promise<void> {
   unwrap(await supabase.from('manager_hubs').delete().eq('manager_id', managerId).eq('hub_id', hubId));
+}
+
+/**
+ * Creates a brand-new HealthHub login (Manager, Hub Lead, Purchase Manager…)
+ * without anyone going into the Supabase dashboard. Runs entirely inside the
+ * `admin-create-user` Edge Function, which checks the caller is an active
+ * super_admin before doing anything privileged. No password ever passes
+ * through this app — the new person sets their own via the returned link.
+ */
+export async function adminCreateUser(input: {
+  email: string;
+  full_name: string;
+  role: AppRole;
+  phone?: string | null;
+}): Promise<{ id: string; setPasswordLink: string | null }> {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+    body: input,
+  });
+  if (error) throw new Error(error.message || 'Could not create the account.');
+  if (!data?.success) throw new Error(data?.error || 'Could not create the account.');
+  return { id: data.id, setPasswordLink: data.setPasswordLink ?? null };
 }
 
 // ---------- inventory ----------

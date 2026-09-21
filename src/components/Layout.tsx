@@ -55,7 +55,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
     to: '/inventory',
     label: 'Inventory',
     icon: Package,
-    allowedRoles: ['purchase_manager', 'field_staff'],
+    allowedRoles: ['purchase_manager', 'field_staff', 'super_admin'],
   },
 ];
 

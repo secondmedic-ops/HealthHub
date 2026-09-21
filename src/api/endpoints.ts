@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type {
   Profile, Hub, DailyReport, DailyReportInput, DailyPerformanceRow,
   MtdRow, PnlRow, MonthlyCost, TodayStatusRow, HubStaffRow, ManagerHubRow, Snapshot,
+  Medicine, HubStockRow, StockPurchaseInput, StockIssueInput, StockPurchase, StockIssue,
 } from '../types/api';
 
 type PgError = { code?: string; message: string; details?: string | null };
@@ -179,4 +180,50 @@ export async function assignManager(managerId: string, hubId: string): Promise<v
 
 export async function unassignManager(managerId: string, hubId: string): Promise<void> {
   unwrap(await supabase.from('manager_hubs').delete().eq('manager_id', managerId).eq('hub_id', hubId));
+}
+
+// ---------- inventory ----------
+export async function listMedicines(): Promise<Medicine[]> {
+  const rows = unwrap(await supabase.from('medicines').select('*').eq('is_active', true).order('name'));
+  return (rows ?? []).map(nums);
+}
+
+export async function addMedicine(name: string, unit: string, unit_price: number, sku?: string | null): Promise<Medicine> {
+  return nums(unwrap(await supabase.from('medicines')
+    .insert({ name, unit, unit_price, sku: sku || null })
+    .select().single()));
+}
+
+/** Current stock on hand, scoped by RLS to the caller's hubs (or every hub for purchase_manager/super_admin). */
+export async function getHubStock(hubIds: string[]): Promise<HubStockRow[]> {
+  if (hubIds.length === 0) return [];
+  const rows = unwrap(await supabase.from('hub_stock').select('*').in('hub_id', hubIds));
+  return (rows ?? []).map(nums);
+}
+
+export async function recordPurchase(input: StockPurchaseInput): Promise<void> {
+  const uid = await getSessionUserId();
+  if (!uid) throw new Error('Your session has expired. Sign in again.');
+  unwrap(await supabase.from('stock_purchases').insert({ ...input, purchased_by: uid }));
+}
+
+/** Deducts from hub_stock via a DB trigger; throws the "Insufficient stock" message on overdraw. */
+export async function recordIssue(input: StockIssueInput): Promise<void> {
+  const uid = await getSessionUserId();
+  if (!uid) throw new Error('Your session has expired. Sign in again.');
+  unwrap(await supabase.from('stock_issues').insert({ ...input, issued_by: uid }));
+}
+
+export async function listRecentPurchases(hubIds: string[], limit = 20): Promise<StockPurchase[]> {
+  if (hubIds.length === 0) return [];
+  const rows = unwrap(await supabase.from('stock_purchases').select('*')
+    .in('hub_id', hubIds).order('created_at', { ascending: false }).limit(limit));
+  return (rows ?? []).map(nums);
+}
+
+export async function listRecentIssues(hubIds: string[], limit = 20): Promise<StockIssue[]> {
+  if (hubIds.length === 0) return [];
+  const rows = unwrap(await supabase.from('stock_issues').select('*')
+    .in('hub_id', hubIds).order('created_at', { ascending: false }).limit(limit));
+  return (rows ?? []).map(nums);
 }

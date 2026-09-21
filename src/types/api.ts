@@ -151,3 +151,50 @@ export interface ManagerHubRow {
   manager_id: string;
   hub_id: string;
 }
+
+// ---------- inventory ----------
+export interface Medicine {
+  id: string;
+  name: string;
+  sku: string | null;
+  unit: string;
+  unit_price: number;
+  is_active: boolean;
+}
+
+export interface HubStockRow {
+  hub_id: string;
+  medicine_id: string;
+  quantity: number;
+  updated_at: string;
+}
+
+export interface StockPurchaseInput {
+  hub_id: string;
+  medicine_id: string;
+  quantity: number;
+  unit_price: number;
+  invoice_ref?: string | null;
+}
+
+export interface StockIssueInput {
+  hub_id: string;
+  medicine_id: string;
+  quantity: number;
+  notes?: string | null;
+}
+
+export interface StockPurchase extends StockPurchaseInput {
+  id: string;
+  total_cost: number;
+  purchased_by: string | null;
+  purchase_date: string;
+  created_at: string;
+}
+
+export interface StockIssue extends StockIssueInput {
+  id: string;
+  issued_by: string | null;
+  issue_date: string;
+  created_at: string;
+}

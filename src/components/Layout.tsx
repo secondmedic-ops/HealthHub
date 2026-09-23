@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -11,6 +11,8 @@ import {
   LogOut,
   Building2,
   Users,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { AppRole } from '../types/api';
 
@@ -76,9 +78,20 @@ const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
   field_staff: 'Field Staff',
 };
 
+const COLLAPSED_WIDTH = 68; // px — icon-only rail
+const EXPANDED_WIDTH = 256; // px — 16rem, same as the old fixed w-64
+
 export function Layout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // The desktop rail auto-hides to an icon-only strip and expands on
+  // hover; clicking the pin button (or the logo, while collapsed) keeps
+  // it open regardless of the mouse. Mobile is unaffected — it keeps its
+  // own bottom tab bar below.
+  const [pinned, setPinned] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const expanded = pinned || hovering;
 
   if (!profile) return null;
 
@@ -93,46 +106,85 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-[#F7F8F6] text-[#1D2329] flex flex-col lg:flex-row antialiased">
-      {/* Desktop Left Rail (≥ 1024px) */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 bg-[#16324F] text-[#F7F8F6] border-r border-[#16324F] min-h-screen">
-        {/* Brand header */}
-        <div className="p-5 border-b border-[#234567]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-[6px] bg-[#1F7A4D] text-white flex items-center justify-center font-bold text-lg">
-              H
+      {/* Spacer that reserves the collapsed rail's width in the flex row —
+          the rail itself is fixed-positioned so it can expand over the
+          page instead of pushing content around. */}
+      <div className="hidden lg:block lg:shrink-0" style={{ width: COLLAPSED_WIDTH }} />
+
+      {/* Desktop Left Rail (≥ 1024px) — auto-hides to icons, expands on hover/click */}
+      <aside
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        className={`hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:h-screen bg-[#16324F] text-[#F7F8F6] border-r border-[#234567] z-40 transition-all duration-200 ease-in-out overflow-hidden ${
+          expanded ? 'shadow-2xl' : ''
+        }`}
+        style={{ width: expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH }}
+      >
+        {/* Brand header — logo doubles as the click-to-pin toggle */}
+        <div className="p-4 border-b border-[#234567] flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPinned((v) => !v)}
+            title={pinned ? 'Unpin sidebar' : 'Keep sidebar open'}
+            className="w-9 h-9 rounded-[6px] bg-[#1F7A4D] text-white flex items-center justify-center font-bold text-lg shrink-0 hover:brightness-110 transition"
+          >
+            H
+          </button>
+          {expanded && (
+            <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="font-semibold tracking-tight text-white text-base leading-tight truncate">
+                  SecondMedic
+                </h1>
+                <p className="text-xs text-[#A8BCCC] truncate">HealthHub</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPinned((v) => !v)}
+                title={pinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+                className="p-1 rounded-[4px] text-[#A8BCCC] hover:text-white hover:bg-[#1C3E61] shrink-0"
+              >
+                {pinned ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
             </div>
-            <div>
-              <h1 className="font-semibold tracking-tight text-white text-base leading-tight">
-                SecondMedic
-              </h1>
-              <p className="text-xs text-[#A8BCCC]">HealthHub</p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* User Card */}
-        <div className="px-5 py-4 border-b border-[#234567] bg-[#12283E]">
-          <p className="text-sm font-medium text-white truncate">
-            {profile.full_name}
-          </p>
-          <div className="flex items-center justify-between mt-1">
-            <span className="inline-block text-xs px-2 py-0.5 rounded-[4px] bg-[#1F3751] text-[#A8BCCC] border border-[#2B4B6E]">
-              {ROLE_DISPLAY_NAMES[profile.role] || profile.role}
-            </span>
-            <span className="text-[11px] text-[#8EA6B9]">IST</span>
-          </div>
+        <div className={`border-b border-[#234567] bg-[#12283E] ${expanded ? 'px-5 py-4' : 'px-0 py-3 flex justify-center'}`}>
+          {expanded ? (
+            <>
+              <p className="text-sm font-medium text-white truncate">{profile.full_name}</p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="inline-block text-xs px-2 py-0.5 rounded-[4px] bg-[#1F3751] text-[#A8BCCC] border border-[#2B4B6E]">
+                  {ROLE_DISPLAY_NAMES[profile.role] || profile.role}
+                </span>
+                <span className="text-[11px] text-[#8EA6B9]">IST</span>
+              </div>
+            </>
+          ) : (
+            <div
+              className="w-8 h-8 rounded-full bg-[#1F3751] border border-[#2B4B6E] text-[#C5D5E4] text-xs font-semibold flex items-center justify-center"
+              title={`${profile.full_name} · ${ROLE_DISPLAY_NAMES[profile.role] || profile.role}`}
+            >
+              {profile.full_name?.charAt(0).toUpperCase() || '?'}
+            </div>
+          )}
         </div>
 
         {/* Navigation list */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className={`flex-1 py-4 space-y-1 ${expanded ? 'px-3' : 'px-2'}`}>
           {visibleNav.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
+                title={item.label}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-[6px] text-sm font-medium transition-colors ${
+                  `flex items-center gap-3 py-2.5 rounded-[6px] text-sm font-medium transition-colors ${
+                    expanded ? 'px-3' : 'px-0 justify-center'
+                  } ${
                     isActive
                       ? 'bg-[#1F7A4D] text-white'
                       : 'text-[#C5D5E4] hover:text-white hover:bg-[#1C3E61]'
@@ -140,21 +192,24 @@ export function Layout() {
                 }
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
+                {expanded && <span className="truncate">{item.label}</span>}
               </NavLink>
             );
           })}
         </nav>
 
         {/* Footer with sign out */}
-        <div className="p-4 border-t border-[#234567]">
+        <div className={`border-t border-[#234567] ${expanded ? 'p-4' : 'p-2'}`}>
           <button
             type="button"
             onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-[6px] text-sm text-[#C5D5E4] hover:text-white hover:bg-[#1C3E61] transition-colors"
+            title="Sign out"
+            className={`w-full flex items-center gap-2 py-2.5 rounded-[6px] text-sm text-[#C5D5E4] hover:text-white hover:bg-[#1C3E61] transition-colors ${
+              expanded ? 'px-3' : 'px-0 justify-center'
+            }`}
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            <span>Sign out</span>
+            {expanded && <span>Sign out</span>}
           </button>
         </div>
       </aside>

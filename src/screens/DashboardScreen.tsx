@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getMyHubs, listReports, getMtd } from '../api/endpoints';
@@ -37,6 +37,8 @@ function StatTile({
   tone = 'neutral',
   meterPct,
   icon: Icon,
+  onClick,
+  active,
 }: {
   label: string;
   value: string;
@@ -44,12 +46,20 @@ function StatTile({
   tone?: Tone;
   meterPct?: number;
   icon: React.ComponentType<{ className?: string }>;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const t = TONE_STYLES[tone];
   return (
-    <div
-      className="rounded-[6px] border p-3.5 sm:p-4 shadow-xs"
-      style={{ backgroundColor: t.bg, borderColor: t.border }}
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-[6px] border p-3.5 sm:p-4 shadow-xs text-left w-full transition-all hover:shadow-sm hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#16324F] focus-visible:ring-offset-1"
+      style={{
+        backgroundColor: t.bg,
+        borderColor: active ? t.text : t.border,
+        boxShadow: active ? `0 0 0 2px ${t.text}` : undefined,
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: t.text }}>
@@ -74,9 +84,11 @@ function StatTile({
           />
         </div>
       )}
-    </div>
+    </button>
   );
 }
+
+type BoardFilter = 'all' | 'onTrack' | 'attention';
 
 interface HubDashboardRow {
   hub: Hub;
@@ -102,6 +114,8 @@ export function DashboardScreen() {
   const [mtdRows, setMtdRows] = useState<MtdRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [boardFilter, setBoardFilter] = useState<BoardFilter>('all');
+  const tableRef = useRef<HTMLDivElement>(null);
 
   const todayStr = todayIST();
   const currentHour = hourIST();
@@ -225,6 +239,21 @@ export function DashboardScreen() {
   const onTrackCount = boardRows.filter((r) => r.achievementPct >= 100).length;
   const attentionCount = boardRows.filter((r) => r.middayAlert || r.closingAlert).length;
 
+  const visibleRows = useMemo(() => {
+    if (boardFilter === 'onTrack') return boardRows.filter((r) => r.achievementPct >= 100);
+    if (boardFilter === 'attention') return boardRows.filter((r) => r.middayAlert || r.closingAlert);
+    return boardRows;
+  }, [boardRows, boardFilter]);
+
+  const scrollToTable = () => {
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const toggleFilter = (mode: BoardFilter) => {
+    setBoardFilter((current) => (current === mode ? 'all' : mode));
+    scrollToTable();
+  };
+
   const formatReportTime = (ts?: string) => {
     if (!ts) return '';
     try {
@@ -289,6 +318,10 @@ export function DashboardScreen() {
             tone={overallAchievement >= 100 ? 'good' : overallAchievement >= 70 ? 'warning' : 'critical'}
             meterPct={overallAchievement}
             icon={TrendingUp}
+            onClick={() => {
+              setBoardFilter('all');
+              scrollToTable();
+            }}
           />
           <StatTile
             label="MTD revenue"
@@ -301,6 +334,10 @@ export function DashboardScreen() {
             tone="neutral"
             meterPct={mtdAchievement}
             icon={Building2}
+            onClick={() => {
+              setBoardFilter('all');
+              scrollToTable();
+            }}
           />
           <StatTile
             label="On track today"
@@ -308,6 +345,8 @@ export function DashboardScreen() {
             sub="branches at or above target"
             tone={onTrackCount === boardRows.length ? 'good' : 'neutral'}
             icon={CheckCircle2}
+            onClick={() => toggleFilter('onTrack')}
+            active={boardFilter === 'onTrack'}
           />
           <StatTile
             label="Needs attention"
@@ -315,7 +354,25 @@ export function DashboardScreen() {
             sub={attentionCount === 0 ? 'all reports on time' : 'branches with a missing report'}
             tone={attentionCount === 0 ? 'good' : 'critical'}
             icon={AlertTriangle}
+            onClick={() => toggleFilter('attention')}
+            active={boardFilter === 'attention'}
           />
+        </div>
+      )}
+
+      {!loading && !error && boardFilter !== 'all' && (
+        <div className="flex items-center justify-between gap-2 bg-[#F0F5F9] border border-[#D1E0EC] rounded-[6px] px-3.5 py-2 text-xs text-[#16324F]">
+          <span>
+            Showing <strong>{visibleRows.length}</strong> of {boardRows.length} branches —{' '}
+            {boardFilter === 'onTrack' ? 'at or above target today' : 'need attention'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setBoardFilter('all')}
+            className="font-medium text-[#16324F] hover:underline shrink-0"
+          >
+            Clear filter
+          </button>
         </div>
       )}
 
@@ -325,7 +382,7 @@ export function DashboardScreen() {
           <p className="text-sm">Loading branch board…</p>
         </div>
       ) : (
-        <div className="bg-white border border-[#D9DEDA] rounded-[6px] overflow-hidden shadow-xs">
+        <div ref={tableRef} className="bg-white border border-[#D9DEDA] rounded-[6px] overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs sm:text-sm">
               <thead>
@@ -356,7 +413,14 @@ export function DashboardScreen() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D9DEDA]">
-                {boardRows.map((row, idx) => (
+                {visibleRows.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="py-10 text-center text-sm text-[#5B6670]">
+                      No branches match this filter right now.
+                    </td>
+                  </tr>
+                )}
+                {visibleRows.map((row, idx) => (
                   <tr
                     key={row.hub.id}
                     onClick={() => navigate(`/hub/${row.hub.id}`)}
